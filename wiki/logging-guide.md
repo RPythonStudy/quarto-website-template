@@ -2,14 +2,15 @@
 
 ## 개요
 
-> AI4RM 프로젝트는 의료 데이터 처리의 특성상 상세한 로깅과 감사 추적이 필요합니다.   
-> 또한 협업 개발을 가정해도 필요합니다. 
-> 이 가이드는 협업 개발자들이 로깅 시스템을 자신의 코드에 적용하는 방법을 설명합니다.
+> AI4REF 프로젝트는 R과 Python을 함께 사용하는 Quarto 기반 연구 프로젝트입니다.   
+> 협업 개발과 코드 디버깅을 위해 통합된 로깅 시스템을 제공합니다. 
+> 이 가이드는 개발자들이 로깅 시스템을 자신의 코드에 적용하는 방법을 설명합니다.
 
 ## 설계 원칙
 
 ### 1. 통합 로깅 아키텍처
-- 위치: `ai4rm/logger/logger.py`
+- Python 위치: `src/common/logger.py`
+- R 위치: `src/R/logger.R`
 - 목적: 프로젝트 전체에서 일관된 로깅 인터페이스 제공
 - ELK Stack 호환: JSON 형태로 로그를 저장하여 Elasticsearch 연동 최적화
 
@@ -18,11 +19,11 @@
 - 파일: JSON 형태로 구조화된 로그 저장 (`logs/dev.log`)
 
 ### 3. 설정 우선순위
-1. 명령행 인자 (최우선)
-2. 환경변수 (`.env` 파일 포함)
-3. 기본값 (`INFO`)
+1. 현재 작업 디렉토리 폴더명 (기본값)
+2. 환경변수 PROJECT_NAME (`.env` 파일 포함)  
+3. 하드코딩된 기본값 (`ai4ref`)
 
-## 로그 레벨 (6단계)
+## 로그 레벨 (5단계)
 
 | 레벨 | 설명 | 사용 예시 |
 |------|------|-----------|
@@ -31,120 +32,163 @@
 | `WARNING` | 주의가 필요한 상황 | 권한 부족, 설정 누락 |
 | `INFO` | 일반적인 정보 (기본값) | 작업 시작/완료, 처리 건수 |
 | `DEBUG` | 디버깅용 상세 정보 | 변수 값, 함수 호출 흐름 |
-| `TRACE` | 가장 상세한 추적 정보 | 데이터 변환 과정, 세밀한 실행 단계 |
 
+## Python 로깅 사용법
 
-## 운영/감사 로그 적용 실전 가이드
-
-### 1. 표준 로거 사용
+### 1. 기본 로거 사용
 ```python
-from logger import get_logger
-logger = get_logger("service_name")
+from common.logger import get_logger
+logger = get_logger()  # 기본: 프로젝트 이름 사용
+# 또는
+logger = get_logger("custom_name")  # 커스텀 이름 사용
 ```
 
-### 2. 감사 로그(Audit Log) 패턴
+### 2. Wrapper 함수 사용 (권장)
 ```python
-import logging
-from datetime import datetime, timezone
-import os, socket
+from common.logger import log_debug, log_info, log_warn, log_error, log_critical
 
-def audit_log(action: str, detail: dict = None, compliance: str = "개인정보보호법 제28조"):
-    audit_logger = logging.getLogger("audit")
-    user = os.getenv("USER") or "unknown"
-    log = {
-        "action": action,
-        "user": user,
-        "process_id": os.getpid(),
-        "server_id": socket.gethostname(),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "compliance_check": compliance
-    }
-    if detail:
-        log.update(detail)
-    audit_logger.info(log)
+log_debug("디버그 메시지")
+log_info("정보 메시지")
+log_warn("경고 메시지")
+log_error("에러 메시지")
+log_critical("심각한 오류")
 ```
 
-### 3. 서비스별 적용 예시
-#### 인증서 생성 유틸리티 (cert_utils.py)
+## R 로깅 사용법
+
+### 1. 로거 초기화
+```r
+# 사용자정의함수 로드 (logger.R 포함)
+invisible(lapply(
+  list.files(here::here("src", "R"), pattern = "\\.R$", full.names = TRUE),
+  source,
+  encoding = "UTF-8"
+))
+
+# 로거 초기화 (.env에서 LOG_LEVEL 읽어서 설정)
+init_logger()
+```
+
+### 2. 로그 메시지 출력
+```r
+log_debug("디버그 메시지")
+log_info("정보 메시지")
+log_warn("경고 메시지")
+log_error("오류 메시지")
+```
+
+출력 형식: `[2025-08-02 11:09:49] [DEBUG] 디버그 메시지`
+
+## 감사 로그 (Audit Log)
+
+### 감사 로그 함수 사용
 ```python
-from logger import get_logger
-def generate_self_signed_cert(...):
-    logger = get_logger("cert_utils")
-    ...
-    logger.info(f"인증서 생성 완료: {crt_path}")
-    audit_log(
-        action="cert_created",
-        detail={"crt_path": crt_path, "key_path": key_path},
-    )
+from common.logger import audit_log
+
+audit_log(
+    action="파일_처리_완료",
+    detail={"파일명": "data.csv", "처리건수": 1000},
+    compliance="개인정보보호법 제28조"
+)
 ```
 
-#### Vault 설치 CLI (vault_install_cli.py)
+## 환경 설정
+
+### .env 파일 설정
+```bash
+# Python 환경 변수 설정
+PYTHONPATH=/home/ben/projects/ai4ref
+LOG_LEVEL=DEBUG
+PROJECT_NAME=ai4ref  # 선택사항
+LOG_PATH=logs/dev.log  # 선택사항
+```
+
+### R 환경 설정
+```bash
+# R 로깅 레벨 설정
+LOG_LEVEL=DEBUG
+```
+
+## 프로젝트별 적용 예시
+
+### Python 스크립트 예시
 ```python
-logger.info("Vault 설치 시작")
-audit_log(action="vault_install_started", detail={...})
+from common.logger import log_info, log_debug
+
+def process_data():
+    log_info("데이터 처리 시작")
+    # ... 처리 로직 ...
+    log_debug("중간 처리 결과 확인")
+    log_info("데이터 처리 완료")
 ```
 
-### 4. 감사 로그 핸들러 분리 (logging.yaml 예시)
-```yaml
-handlers:
-  audit_file:
-    class: logging.FileHandler
-    level: INFO
-    formatter: json
-    filename: logs/audit.log
-loggers:
-  audit:
-    handlers: [audit_file]
-    level: INFO
-    propagate: False
+### Quarto 문서(QMD)에서 사용
+````markdown
+```{r}
+#| label: setup
+#| include: false
+
+# 사용자정의함수 로드
+invisible(lapply(
+  list.files(here::here("src", "R"), pattern = "\\.R$", full.names = TRUE),
+  source,
+  encoding = "UTF-8"
+))
+
+# 로거 초기화
+init_logger()
 ```
+
+```{python}
+from common.logger import log_info
+log_info("Python 코드 블록 실행")
+```
+````
 
 ## 협업 개발자를 위한 체크리스트
-- [x] 모든 서비스/유틸리티에서 표준 로거(get_logger) 사용
-- [x] 개인정보 처리/중요 이벤트는 운영+감사 로그 중복 기록
-- [x] 감사 로그에 사용자/프로세스/서버/컴플라이언스 정보 포함
-- [x] 로그레벨/핸들러는 logging.yaml 또는 .env로 설정
-- [x] 테스트 코드에서도 동일한 로깅 패턴 적용
+- [x] Python: `from common.logger import log_debug, log_info, log_warn, log_error` 사용
+- [x] R: `init_logger()` 초기화 후 `log_info()`, `log_debug()` 등 사용
+- [x] 프로젝트 스크립트: 로깅 시스템 적용
+- [x] 교육용 QMD 파일: 로깅 없이 간결하게 작성
+- [x] 환경 설정: .env 파일로 LOG_LEVEL, PYTHONPATH 관리
 
 ---
 
-## Q&A 및 추가 안내
+## PYTHONPATH 설정 및 import 경로
 
-- 운영/감사 로그 중복 기록은 서비스/유틸리티 코드에서 직접 구현합니다. (로깅 인프라에서는 분리만 지원)
-- 감사 로그 핸들러는 logging.yaml에서 별도 파일로 지정 가능
-- 컴플라이언스 태그, 사용자/프로세스 정보는 감사 로그에 반드시 포함
-
-- 문의: benkorea.ai@gmail.com
-
-프로젝트의 모든 실행은 루트 디렉터리 기준으로 이루어집니다.
-
-### 프로젝트 루트에서의 임포트
-`logger/__init__.py`에서  
-```python
-from .logger import get_logger
+### 현재 프로젝트 구조
 ```
-로 설정되어 있으므로, 루트에서 다음과 같이 임포트하여 사용할 수 있습니다:
-```python
-from logger import get_logger
+ai4ref/
+├── src/
+│   ├── common/
+│   │   └── logger.py      # Python 로거
+│   └── R/
+│       └── logger.R       # R 로거
+├── scripts/
+│   ├── python/
+│   └── R/
+└── .env                   # 환경 변수 설정
 ```
 
-### import 경로 설정
-본 프로젝트는 모노레포 구조를 채택하고 있으며, 저자는 편집자 개발모드를 이용해 경로를 설정하는 것이 이 프로젝트에 적합치 않다고 판단했습니다. 따라서 이 프로젝트에서는 `PYTHONPATH=home/ben/projects/ai4rm` 환경변수로 경로를 설정하는 방법을 적용키로 하였습니다.   
-구체적으로는 .env 파일을 사용하여 환경변수를 설정하였고   
-프로젝트에서 자동으로 경로를 인식케 하려고 .vscode/settings.json 파일에 아래의 설정을 적용했습니다.
+### PYTHONPATH 설정
+본 프로젝트는 .env 파일을 통해 PYTHONPATH를 설정합니다:
+```bash
+PYTHONPATH=/home/ben/projects/ai4ref
+```
+
+이 설정으로 인해 `src` 디렉토리가 Python 모듈 검색 경로에 포함되어 다음과 같이 import할 수 있습니다:
+
+### Python에서의 import
+```python
+# src 하위 모듈들을 직접 import
+from common.logger import log_info, log_debug
+from common.logger import get_logger, audit_log
+```
+
+### VS Code 설정
+`.vscode/settings.json`에 다음 설정을 추가하여 VS Code에서 자동으로 .env 파일을 인식하도록 합니다:
 ```json
 {
     "python.envFile": "${workspaceFolder}/.env"
 }
-```  
-
-### src/ 하위 디렉터리에서의 임포트
-위의 설정 때문에 `src/` 내부 모듈에서 로거를 임포트할 때도 프로젝트의 루트에서 임포트와 같은 방식으로 가능하게 됩니다.
-```python
-from logger import get_logger
 ```
-
-### tests/ 하위 디렉터리에서의 임포트
-테스트 코드에서 로거를 사용하려면 역시 루트에서 임포트 하듯이 가능합니다.
-
-- 끝 -

@@ -1,17 +1,11 @@
-# logger/logger.R
-# R 초간단 로깅 모듈
-
 library(logger)
-library(yaml)
 
-# 로거 초기화
 init_logger <- function() {
-  config <- yaml::read_yaml("config/logger.yml")
+  readRenviron(".env")
+  log_level <- Sys.getenv("LOG_LEVEL", "INFO")
   
-  # 로그 레벨 설정
-  logger::log_threshold(get(config$LOG_LEVEL, envir = asNamespace("logger")))
+  logger::log_threshold(log_level)
   
-  # 간단한 출력 형식: [timestamp] [level] message
   logger::log_layout(logger::layout_glue_generator(
     format = '[{format(time, "%Y-%m-%d %H:%M:%S")}] [{toupper(level)}] {msg}'
   ))

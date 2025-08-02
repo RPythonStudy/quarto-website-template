@@ -9,20 +9,20 @@ date-modified: last-modified
 ```{r}
 #| label: setup
 #| include: false
-#| #| message: false
+#| message: false
 #| warning: false
 
-# R 로거 로드 및 초기화
-source("logger/logger.R")
-init_logger()
+# 라이브러리 일괄호출
+library(here)
 
-# 프로젝트에 필요한 라이브러리 일괄호출
-library(here)       # 프로젝트 경로 관리
-
-# 사용자정의함수가 있는 경우 호출
+# 사용자정의함수 호출
 invisible(lapply(
   list.files(here::here("src", "R"), pattern = "\\.R$", full.names = TRUE),
   source,
   encoding = "UTF-8"
 ))
+
+# 로거 초기화
+init_logger()
+
 ```
